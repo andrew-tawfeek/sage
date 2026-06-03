@@ -79,9 +79,23 @@ AUTHORS:
 
 from math import inf
 from random import choice, randrange
+from enum import Enum
 
 oo = inf
 
+class TILE_TYPES(Enum):
+    BLANK = 0
+    CORNER_LEFT_TO_BOTTOM = 1
+    CORNER_BOTTOM_TO_RIGHT = 2
+    CORNER_TOP_TO_RIGHT = 3
+    CORNER_LEFT_TO_TOP = 4
+    HORIZONTAL_STRAIGHT = 5
+    VERTICAL_STRAIGHT = 6
+    SMOOTHING_TOP_TO_RIGHT = 7
+    SMOOTHING_LEFT_TO_TOP = 8
+    HORIZONTAL_OVERSTRAND_CROSSING = 9
+    VERTICAL_OVERSTRAND_CROSSING = 10
+    VIRTUAL_CROSSING = 11
 
 TILE_CONNECTIONS = {
     0: (),
