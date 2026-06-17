@@ -22,6 +22,7 @@ from sage.knots.link import Link
 from sage.knots.knot_table import small_knots_table
 from sage.knots.gauss_code import (recover_orientations, dowker_to_gauss,
                                    rectangular_diagram)
+from sage.knots.mosaic import TILE_TYPES
 
 from sage.structure.parent import Parent
 from sage.structure.element import Element
@@ -146,6 +147,53 @@ class Knot(Link, Element, metaclass=InheritComparisonClasscallMetaclass):
         pd_len = len(self.pd_code())
         return 'Knot represented by {} crossings'.format(pd_len)
 
+    def _rectangular_mosaic_form_in_tile_type_(self):
+        gauss = self.gauss_code()
+        if not gauss:
+            gauss = []
+        else:
+            gauss = gauss[0]
+
+        graphe, (hori, vert) = rectangular_diagram(gauss)
+        maxx, maxy = 0, 0
+        for a, b in graphe:
+            maxx = max(a, maxx)
+            maxy = max(b, maxy)
+        M = [[TILE_TYPES.BLANK for a in range(maxy + 1)] for b in range(maxx + 1)]
+        for a, b in graphe:
+            (x, y), (xx, yy) = graphe.neighbors((a, b))
+            if x != a:
+                x, y, xx, yy = xx, yy, x, y
+            if y < b:
+                if xx < a:
+                    M[a][b] = TILE_TYPES.CORNER_LEFT_TO_TOP
+                else:
+                    M[a][b] = TILE_TYPES.CORNER_LEFT_TO_BOTTOM
+            else:
+                if xx < a:
+                    M[a][b] = TILE_TYPES.CORNER_TOP_TO_RIGHT
+                else:
+                    M[a][b] = TILE_TYPES.CORNER_BOTTOM_TO_RIGHT
+
+        for ab, cd in graphe.edge_iterator(labels=False):
+            a, b = ab
+            c, d = cd
+            if a == c:
+                b, d = sorted((b, d))
+                for i in range(b + 1, d):
+                    M[a][i] = TILE_TYPES.HORIZONTAL_STRAIGHT
+            else:
+                a, c = sorted((a, c))
+                for i in range(a + 1, c):
+                    M[i][b] = TILE_TYPES.VERTICAL_STRAIGHT
+
+        for x, y in hori:
+            M[x][y] = TILE_TYPES.HORIZONTAL_OVERSTRAND_CROSSING
+        for x, y in vert:
+            M[x][y] = TILE_TYPES.VERTICAL_OVERSTRAND_CROSSING
+        
+        return M
+
     def _unicode_art_(self):
         """
         Return unicode art for the knot.
@@ -183,45 +231,9 @@ class Knot(Link, Element, metaclass=InheritComparisonClasscallMetaclass):
             ╭╮
             ╰╯
         """
-        style = 2  # among 0, 1, 2 (how to display crossings, see below)
-        gauss = self.gauss_code()
-        if not gauss:
-            gauss = []
-        else:
-            gauss = gauss[0]
-
-        graphe, (hori, vert) = rectangular_diagram(gauss)
-        maxx, maxy = 0, 0
-        for a, b in graphe:
-            maxx = max(a, maxx)
-            maxy = max(b, maxy)
-        M = [[" " for a in range(maxy + 1)] for b in range(maxx + 1)]
-        for a, b in graphe:
-            (x, y), (xx, yy) = graphe.neighbors((a, b))
-            if x != a:
-                x, y, xx, yy = xx, yy, x, y
-            if y < b:
-                if xx < a:
-                    M[a][b] = "╯"
-                else:
-                    M[a][b] = "╮"
-            else:
-                if xx < a:
-                    M[a][b] = "╰"
-                else:
-                    M[a][b] = "╭"
-
-        for ab, cd in graphe.edge_iterator(labels=False):
-            a, b = ab
-            c, d = cd
-            if a == c:
-                b, d = sorted((b, d))
-                for i in range(b + 1, d):
-                    M[a][i] = "─"
-            else:
-                a, c = sorted((a, c))
-                for i in range(a + 1, c):
-                    M[i][b] = "│"
+        style = 2  # among 0, 1, 2 (how to display crossings, see below)     
+        H = "─"
+        V = "│"
 
         if style == 0:
             H = "┿"
@@ -233,13 +245,41 @@ class Knot(Link, Element, metaclass=InheritComparisonClasscallMetaclass):
             H = "─"
             V = "│"
 
-        for x, y in hori:
-            M[x][y] = H
-        for x, y in vert:
-            M[x][y] = V
+        replacement_dictionary = {
+            TILE_TYPES.BLANK: " ",
+            TILE_TYPES.CORNER_BOTTOM_TO_RIGHT: "╭",
+            TILE_TYPES.CORNER_TOP_TO_RIGHT: "╰",
+            TILE_TYPES.CORNER_LEFT_TO_BOTTOM: "╮",
+            TILE_TYPES.CORNER_LEFT_TO_TOP: "╯",
+            TILE_TYPES.HORIZONTAL_STRAIGHT: "─",
+            TILE_TYPES.VERTICAL_STRAIGHT: "│",
+            TILE_TYPES.HORIZONTAL_OVERSTRAND_CROSSING: H,
+            TILE_TYPES.VERTICAL_OVERSTRAND_CROSSING: V
+        }
+
+        rectangular_mosaic_form = self._rectangular_mosaic_form_in_tile_type_()
+        height = len(rectangular_mosaic_form)
+        width = len(rectangular_mosaic_form[0])
+        M = [[replacement_dictionary[rectangular_mosaic_form[b][a]] for a in range(width)] for b in range(height)]
 
         from sage.typeset.unicode_art import UnicodeArt
         return UnicodeArt([''.join(ligne) for ligne in M])
+
+    def mosaic_matrix(self):
+        """
+        Return the Mosaic Matrix of ``self``
+        """
+        rectangular_mosaic_form = self._rectangular_mosaic_form_in_tile_type_()
+        height = len(rectangular_mosaic_form)
+        width = len(rectangular_mosaic_form[0])
+        square_length = max(height, width)
+
+        mosaic_form = [[0 for a in range(square_length)] for b in range(square_length)]
+        for y in range(height):
+            for x in range(width):
+                mosaic_form[x][y] = rectangular_mosaic_form[x][y].value
+        
+        return mosaic_form
 
     def dt_code(self):
         """

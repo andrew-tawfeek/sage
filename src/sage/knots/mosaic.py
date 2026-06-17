@@ -79,9 +79,23 @@ AUTHORS:
 
 from math import inf
 from random import choice, randrange
+from enum import Enum
 
 oo = inf
 
+class TILE_TYPES(Enum):
+    BLANK = 0
+    CORNER_LEFT_TO_BOTTOM = 1
+    CORNER_BOTTOM_TO_RIGHT = 2
+    CORNER_TOP_TO_RIGHT = 3
+    CORNER_LEFT_TO_TOP = 4
+    HORIZONTAL_STRAIGHT = 5
+    VERTICAL_STRAIGHT = 6
+    SMOOTHING_TOP_TO_RIGHT = 7
+    SMOOTHING_LEFT_TO_TOP = 8
+    HORIZONTAL_OVERSTRAND_CROSSING = 9
+    VERTICAL_OVERSTRAND_CROSSING = 10
+    VIRTUAL_CROSSING = 11
 
 TILE_CONNECTIONS = {
     0: (),
@@ -1637,3 +1651,81 @@ def tangle_join(tangle_list):
               for i in range(tangle0.size())]
 
     return Mosaic(top + bottom)
+
+def _build_closure_with_position_(strands_left, mid_point, direction, mosaic_dictionary):  
+    if direction == -1:
+        CORNER_LEFT = TILE_TYPES.CORNER_BOTTOM_TO_RIGHT.value
+        CORNER_RIGHT = TILE_TYPES.CORNER_LEFT_TO_BOTTOM.value
+        SMOOTHING_LEFT = TILE_TYPES.SMOOTHING_LEFT_TO_TOP.value
+        SMOOTHING_RIGHT = TILE_TYPES.SMOOTHING_TOP_TO_RIGHT.value
+    else:
+        CORNER_LEFT = TILE_TYPES.CORNER_TOP_TO_RIGHT.value
+        CORNER_RIGHT = TILE_TYPES.CORNER_LEFT_TO_TOP.value
+        SMOOTHING_LEFT = TILE_TYPES.SMOOTHING_TOP_TO_RIGHT.value
+        SMOOTHING_RIGHT = TILE_TYPES.SMOOTHING_LEFT_TO_TOP.value
+    
+    while strands_left != 0:
+        mosaic_dictionary[(mid_point[0] - strands_left, mid_point[1])] = CORNER_LEFT
+        for column in range(-strands_left + 1, 0):
+            mosaic_dictionary[(mid_point[0] + column, mid_point[1])] = SMOOTHING_LEFT
+
+        for column in range(0, strands_left - 1):
+            mosaic_dictionary[(mid_point[0] + column, mid_point[1])] = SMOOTHING_RIGHT
+        mosaic_dictionary[(mid_point[0] + strands_left - 1, mid_point[1])] = CORNER_RIGHT
+
+        mid_point = (mid_point[0], mid_point[1] + direction)
+        strands_left -= 1
+    
+    return mosaic_dictionary
+
+def _convert_mosaic_dictionary_to_matrix_(mosaic_dictionary):
+    max_x = max([x for (x, _) in mosaic_dictionary])
+    min_x = min([x for (x, _) in mosaic_dictionary])
+    max_y = max([y for (_, y) in mosaic_dictionary])
+    min_y = min([y for (_, y) in mosaic_dictionary])
+
+    dimension = max([max_x - min_x, max_y - min_y])
+    mosaic_matrix = []
+
+    for y in range(dimension + 1):
+        mosaic_matrix += [[]]
+        for x in range(dimension + 1):
+            position = (x + min_x, y + min_y)
+            if position in mosaic_dictionary:
+                mosaic_matrix[y] += [mosaic_dictionary[position]]
+            else:
+                mosaic_matrix[y] += [0]
+    
+    return mosaic_matrix
+
+        
+    
+def matrix_from_expanded_braid_word(braid_word):
+    """
+    Give a mosaic matrix representation of a braidword in the form [(crossing_index, sign_of_crossing = +- 1), ...]
+    """
+    mosaic_dictionary = dict()
+    number_of_strands = max([crossing[0] + 1 for crossing in braid_word])
+    number_of_crossings = len(braid_word)
+
+    mosaic_dictionary = _build_closure_with_position_(number_of_strands, (0,0), -1, mosaic_dictionary)
+    mosaic_dictionary = _build_closure_with_position_(number_of_strands, (number_of_crossings, number_of_crossings + 1), 1, mosaic_dictionary)
+
+    mid_point = (number_of_crossings ,number_of_crossings + 1)
+    for crossing in braid_word:
+        [location, sign] = crossing
+        mid_point =  (mid_point[0] - 1,mid_point[1] - 1) # With each new crossing we move up and to the left along the braid
+        for column in range(-number_of_strands + 1, number_of_strands):
+            position = (mid_point[0] + column, mid_point[1])
+            mosaic_dictionary[position] = TILE_TYPES.SMOOTHING_TOP_TO_RIGHT.value
+        mosaic_dictionary[(mid_point[0] - number_of_strands, mid_point[1])] = TILE_TYPES.CORNER_TOP_TO_RIGHT.value
+        mosaic_dictionary[(mid_point[0] + number_of_strands, mid_point[1])] = TILE_TYPES.CORNER_LEFT_TO_BOTTOM.value
+        crossing_position = (mid_point[0] + location, mid_point[1])
+        if sign == -1:
+            mosaic_dictionary[crossing_position] = TILE_TYPES.HORIZONTAL_OVERSTRAND_CROSSING.value
+        else: 
+            mosaic_dictionary[crossing_position] = TILE_TYPES.VERTICAL_OVERSTRAND_CROSSING.value
+
+    return _convert_mosaic_dictionary_to_matrix_(mosaic_dictionary)
+    
+
