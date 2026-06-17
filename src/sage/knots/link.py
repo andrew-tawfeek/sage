@@ -68,6 +68,7 @@ from sage.rings.integer import Integer
 from sage.misc.flatten import flatten
 from sage.misc.cachefunc import cached_method
 from sage.structure.sage_object import SageObject
+from sage.knots.mosaic import matrix_from_expanded_braid_word
 
 lazy_import("sage.functions.generalized", "sign")
 lazy_import('sage.groups.braid', ['Braid', 'BraidGroup'])
@@ -1714,6 +1715,30 @@ class Link(SageObject):
         dn = [(i[0], i[1]) if orient[j] == -1 else (i[0], i[3])
               for j, i in enumerate(pd)]
         return dn
+    
+    def mosaic_matrix(self):
+        r"""
+        Return a mosaic matrix of ``self`` using the braid word. 
+        This ignores any strands with index greater than one plus the index of the last crossing. 
+        """
+        braid_syllables_with_indices = []
+
+        for crossing in self.braid().syllables():
+            crossing_index = str(crossing[0])[1:]
+            if crossing_index:
+                crossing_index = int(crossing_index)
+            else:
+                crossing_index = 0
+            crossing_power = crossing[1]
+            while crossing_power != 0:
+                if crossing_power < 0:
+                    braid_syllables_with_indices += [(crossing_index, -1)]
+                    crossing_power += 1
+                else:
+                    braid_syllables_with_indices += [(crossing_index, 1)]
+                    crossing_power -= 1
+        
+        return matrix_from_expanded_braid_word(braid_syllables_with_indices)
 
     def _braid_word_components(self):
         r"""
